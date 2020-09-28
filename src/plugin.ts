@@ -7,13 +7,14 @@ import cloneBuffer from 'clone-buffer';
 import { stripePaymentMethodHandler } from './stripe-payment-methods';
 import * as http from 'http';
 import { RawBodyIncomingMessage } from './interfaces';
+import { StripeController } from './stripe-controller';
 
 /**
  * This plugin implements the Stripe (https://www.stripe.com/) payment provider.
  */
 @VendurePlugin({
     imports: [PluginCommonModule],
-    controllers: [],
+    controllers: [StripeController],
 
     configuration: (config: RuntimeVendureConfig) => {
         config.paymentOptions.paymentMethodHandlers.push(stripePaymentMethodHandler);

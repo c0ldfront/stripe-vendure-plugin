@@ -4,12 +4,13 @@ import { PaymentMethodArgsHash } from './types';
 
 export function getGateway(args: PaymentMethodArgsHash): Stripe {
     // Reference: https://github.com/stripe/stripe-node
-    return new Stripe(args.secretKey.toString(), {
+    const stripeKey = args.stripeTestMode ? args.liveSecretKey : args.testSecretKey;
+    return new Stripe(stripeKey, {
         apiVersion: '2020-08-27',
         appInfo: {
             name: 'VendureIOStripePlugin',
-            version: '1.0.0',
-            url: 'https://github.com/c0ldfront/stripe-vendure-plugin',
+            version: '0.0.1',
+            url: 'https://stripe.cryptic.dev',
         },
     });
 }

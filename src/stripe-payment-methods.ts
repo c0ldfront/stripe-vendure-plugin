@@ -3,6 +3,8 @@ import {
     CreatePaymentResult,
     CreateRefundResult,
     Logger,
+    Order,
+    Payment,
     PaymentMethodHandler,
     SettlePaymentResult,
 } from '@vendure/core';
@@ -11,28 +13,59 @@ import { getGateway } from './stripe-common';
 import { loggerCtx } from './constants';
 import { Stripe } from 'stripe';
 import { PaymentMethodArgsHash } from './types';
+import { ConfigArgValues } from '@vendure/core/dist/common/configurable-operation';
+import { PaymentMetadata } from '@vendure/core/dist/entity/payment/payment.entity';
 
 /**
- * The handler for stripe payments
+ * The handler for Braintree payments.
+ * TODO: Implement refunds.
+ * export declare type ConfigArgType = 'string' | 'int' | 'float' | 'boolean' | 'datetime' | 'ID';
  */
-export const stripePaymentMethodHandler: any = new PaymentMethodHandler({
+export const stripePaymentMethodHandler = new PaymentMethodHandler({
     code: 'stripe',
     description: [{ languageCode: LanguageCode.en, value: 'stripe_description' }],
     args: {
-        automaticCapture: {
+        stripeTestMode: {
             type: 'boolean',
         },
-        secretKey: {
-            type: 'string',
-            label: [{ languageCode: LanguageCode.en, value: 'stripe_secret_key' }],
+        stripeAutomaticCapture: {
+            type: 'boolean',
         },
-        publishedKey: {
+        testPublishableKey: {
             type: 'string',
-            label: [{ languageCode: LanguageCode.en, value: 'stripe_published_key' }],
+        },
+        testSecretKey: {
+            type: 'string',
+        },
+        livePublishableKey: {
+            type: 'string',
+        },
+        liveSecretKey: {
+            type: 'string',
+        },
+        statementDescriptor: {
+            type: 'string',
+        },
+        enableStripeWebhooks: {
+            type: 'boolean',
+        },
+        testWebhookSecretKey: {
+            type: 'string',
+        },
+        liveWebhookSecretKey: {
+            type: 'string',
         },
     },
 
-    createPayment: async (order, args: PaymentMethodArgsHash, metadata): Promise<CreatePaymentResult> => {
+    createPayment: async ({
+        order,
+        args,
+        metadata,
+    }: {
+        order: Order;
+        args: ConfigArgValues<any>;
+        metadata: PaymentMetadata;
+    }): Promise<CreatePaymentResult> => {
         const gateway = getGateway(args);
         let intent!: Stripe.Response<Stripe.PaymentIntent>;
 
@@ -41,8 +74,8 @@ export const stripePaymentMethodHandler: any = new PaymentMethodHandler({
                 amount: order.total,
                 currency: order.currencyCode,
                 payment_method: metadata.paymentMethod.id,
-                capture_method: args.automaticCapture ? 'automatic' : 'manual',
-                confirmation_method: args.automaticCapture ? 'automatic' : 'manual',
+                capture_method: args.stripeAutomaticCapture ? 'automatic' : 'manual',
+                confirmation_method: args.stripeAutomaticCapture ? 'automatic' : 'manual',
                 confirm: true,
             });
         } catch (e) {
@@ -51,13 +84,17 @@ export const stripePaymentMethodHandler: any = new PaymentMethodHandler({
 
         return {
             amount: order.total,
-            state: args.automaticCapture ? 'Settled' : 'Authorized',
+            state: args.stripeAutomaticCapture ? 'Settled' : 'Authorized',
             transactionId: intent!.id.toString(),
             metadata: intent,
         };
     },
 
-    settlePayment: async (order, payment, args): Promise<SettlePaymentResult> => {
+    settlePayment: async (
+        order: Order,
+        payment: Payment,
+        args: ConfigArgValues<any>,
+    ): Promise<SettlePaymentResult> => {
         const gateway = getGateway(args);
         let response;
         try {
@@ -65,7 +102,8 @@ export const stripePaymentMethodHandler: any = new PaymentMethodHandler({
                 amount_to_capture: order.total,
             });
         } catch (e) {
-            Logger.error(e, loggerCtx);
+            // eslint-disable-next-line no-console
+            console.log(e);
             return {
                 success: false,
                 metadata: response,
@@ -78,7 +116,13 @@ export const stripePaymentMethodHandler: any = new PaymentMethodHandler({
         };
     },
 
-    createRefund: async (input, total, order, payment, args): Promise<CreateRefundResult> => {
+    createRefund: async (
+        input: any,
+        total: number,
+        order: Order,
+        payment: Payment,
+        args: ConfigArgValues<any>,
+    ): Promise<CreateRefundResult> => {
         const gateway = getGateway(args);
         let response;
 
