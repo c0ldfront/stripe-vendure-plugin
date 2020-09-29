@@ -3,7 +3,6 @@ import {
     ChannelService,
     EntityNotFoundError,
     ID,
-    InternalServerError,
     LanguageCode,
     Logger,
     OrderService,
@@ -14,7 +13,7 @@ import { loggerCtx } from './constants';
 import { getGateway, getPaymentMethodArgs } from './stripe-common';
 import { InjectConnection } from '@nestjs/typeorm';
 import { Connection } from 'typeorm';
-import { IStripeOrder, IStripeWebhookResponse } from './interfaces';
+import { IStripeOrder } from './interfaces';
 import { Stripe } from 'stripe';
 
 @Controller('stripe')
@@ -26,30 +25,20 @@ export class StripeController {
     ) {}
 
     @Post('/webhook/')
-    async index(@Req() req: any, @Res() res: any): Promise<IStripeWebhookResponse> {
+    async index(@Req() req: any, @Res() res: any): Promise<any> {
         const args = await getPaymentMethodArgs(this.connection);
         const stripe = getGateway(args);
         const ctx = await this.createContext();
 
         const sig = req.headers['stripe-signature'] as string;
         const endpointSecret = !args.stripeTestMode ? args.liveWebhookSecretKey : args.testWebhookSecretKey;
-
-        if (args.enableStripeWebhookSignatureCheck) {
-            try {
-                stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
-            } catch (err) {
-                Logger.error(`Webhook error: ${err.message}`, loggerCtx);
-                return res.status(400).send(`Webhook error: ${err.message}`);
-            }
-        }
-
         let event: Stripe.Event;
 
         try {
-            event = JSON.parse(req.body);
+            event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
         } catch (err) {
-            Logger.error(`Malformed json strip event: ${err}`, loggerCtx);
-            throw new InternalServerError(`[${loggerCtx}] Malformed json strip event.`);
+            Logger.error(`Webhook error: ${err.message}`, loggerCtx);
+            return res.status(400);
         }
 
         Logger.info(`Webhook success: ${event.id}`, loggerCtx);
@@ -101,18 +90,19 @@ export class StripeController {
                 await this.handleWebhookSetupIntent(stripeOrderEvent);
                 break;
             default:
-                // might want to response with a 400 notifying stripe that the event was not processed. This might email
-                // the stripe admin giving notice to an unhandled event type.
-                // return res.status(400).end();
                 Logger.warn(`Unhandled event type ${event.type}`, loggerCtx);
+                return res.status(400);
         }
 
-        return {
-            received: true,
-        };
+        return res.send(200);
     }
 
+    // constructStripeObject<T>(stripeDataObject: Stripe.Event.Data): T {
+    //     return stripeDataObject.object as T;
+    // }
+
     async handleWebhookPayment(stripeOrderEvent: IStripeOrder): Promise<void> {
+        // const stripeObject = this.constructStripeObject<Stripe.Source>(stripeOrderEvent.event.data);
         const stripeObject = stripeOrderEvent.event.data.object as Stripe.Source;
         Logger.info(`source.chargeable: ${stripeOrderEvent.event.id}`, loggerCtx);
         // await this.orderService.settlePayment(stripeOrderEvent.ctx, 20);
