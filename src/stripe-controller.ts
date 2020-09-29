@@ -16,7 +16,7 @@ export class StripeController {
         const args = await this.getPaymentMethodArgs();
         const stripe = getGateway(args);
         const sig = req.headers['stripe-signature'] as string;
-        const endpointSecret = 'whsec_0JrpoNFCMhKHVeXG3uDz8wky4eJjuerF';
+        const endpointSecret = !args.stripeTestMode ? args.liveWebhookSecretKey : args.testWebhookSecretKey;
         let event: any;
 
         try {
@@ -75,7 +75,7 @@ export class StripeController {
     // GET /v1/setup_intents/:id
     // GET /v1/setup_intents
     // @Get()
-    private async getPaymentMethodArgs(): Promise<PaymentMethodArgsHash> {
+    async getPaymentMethodArgs(): Promise<PaymentMethodArgsHash> {
         const method = await this.connection.getRepository(PaymentMethod).findOne({
             where: {
                 code: stripePaymentMethodHandler.code,
@@ -87,9 +87,16 @@ export class StripeController {
         return method.configArgs.reduce((hash, arg) => {
             return {
                 ...hash,
-                [arg.name]: arg.value,
+                [arg.name]: this.checkType(arg.value),
             };
         }, {} as PaymentMethodArgsHash);
+    }
+
+    checkType(argValue: string): any {
+        if (argValue === 'true' || argValue === 'false') {
+            return JSON.parse(argValue);
+        }
+        return argValue;
     }
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types,@typescript-eslint/no-empty-function
