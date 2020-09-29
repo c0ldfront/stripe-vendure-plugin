@@ -12,13 +12,11 @@ import {
 import { getGateway } from './stripe-common';
 import { loggerCtx } from './constants';
 import { Stripe } from 'stripe';
-import { PaymentMethodArgsHash } from './types';
 import { ConfigArgValues } from '@vendure/core/dist/common/configurable-operation';
 import { PaymentMetadata } from '@vendure/core/dist/entity/payment/payment.entity';
 
 /**
- * The handler for Braintree payments.
- * TODO: Implement refunds.
+ * The handler for stripe payments.
  * export declare type ConfigArgType = 'string' | 'int' | 'float' | 'boolean' | 'datetime' | 'ID';
  */
 export const stripePaymentMethodHandler = new PaymentMethodHandler({
@@ -54,6 +52,12 @@ export const stripePaymentMethodHandler = new PaymentMethodHandler({
         },
         liveWebhookSecretKey: {
             type: 'string',
+        },
+        enableStripeReceipts: {
+            type: 'boolean',
+        },
+        enableStripeWebhookSignatureCheck: {
+            type: 'boolean',
         },
     },
 
