@@ -1,7 +1,9 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import {
+    CreatePaymentErrorResult,
     CreatePaymentResult,
     CreateRefundResult,
+    InternalServerError,
     Logger,
     Order,
     Payment,
@@ -14,6 +16,7 @@ import { loggerCtx } from './constants';
 import { Stripe } from 'stripe';
 import { ConfigArgValues } from '@vendure/core/dist/common/configurable-operation';
 import { PaymentMetadata } from '@vendure/core/dist/entity/payment/payment.entity';
+import { PaymentState } from '@vendure/core/dist/service/helpers/payment-state-machine/payment-state';
 
 /**
  * The handler for stripe payments.
@@ -61,15 +64,7 @@ export const stripePaymentMethodHandler = new PaymentMethodHandler({
         },
     },
 
-    createPayment: async ({
-        order,
-        args,
-        metadata,
-    }: {
-        order: Order;
-        args: ConfigArgValues<any>;
-        metadata: PaymentMetadata;
-    }): Promise<CreatePaymentResult> => {
+    createPayment: async (order, args, metadata): Promise<CreatePaymentResult | CreatePaymentErrorResult> => {
         const gateway = getGateway(args);
         let intent!: Stripe.Response<Stripe.PaymentIntent>;
 
@@ -84,12 +79,18 @@ export const stripePaymentMethodHandler = new PaymentMethodHandler({
             });
         } catch (e) {
             Logger.error(e, loggerCtx);
+            return {
+                amount: order.total,
+                state: 'Error',
+                errorMessage: e,
+                metadata: intent,
+            };
         }
 
         return {
             amount: order.total,
             state: args.stripeAutomaticCapture ? 'Settled' : 'Authorized',
-            transactionId: intent!.id.toString(),
+            transactionId: '',
             metadata: intent,
         };
     },
