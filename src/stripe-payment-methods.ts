@@ -66,7 +66,7 @@ export const stripePaymentMethodHandler = new PaymentMethodHandler({
 
     createPayment: async (order, args, metadata): Promise<CreatePaymentResult | CreatePaymentErrorResult> => {
         const gateway = getGateway(args);
-        let intent!: Stripe.Response<Stripe.PaymentIntent>;
+        let intent: Stripe.Response<Stripe.PaymentIntent>;
 
         try {
             intent = await gateway.paymentIntents.create({
@@ -83,7 +83,6 @@ export const stripePaymentMethodHandler = new PaymentMethodHandler({
                 amount: order.total,
                 state: 'Error',
                 errorMessage: e,
-                metadata: intent,
             };
         }
 

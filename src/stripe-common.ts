@@ -2,7 +2,8 @@ import Stripe from 'stripe';
 
 import { PaymentMethodArgsHash } from './types';
 import { Connection } from 'typeorm';
-import { InternalServerError, Logger, PaymentMethod } from '@vendure/core';
+import { InternalServerError, Logger, PaymentMethod, ConfigArgType } from '@vendure/core';
+import { assertNever } from '@vendure/common/lib/shared-utils';
 import { stripePaymentMethodHandler } from './stripe-payment-methods';
 import { loggerCtx } from './constants';
 
@@ -54,4 +55,25 @@ function checkType(argValue: string): any {
         return JSON.parse(argValue);
     }
     return argValue;
+}
+
+// This function was pulled from the core module inside payment-method.service.ts.
+// https://github.com/vendure-ecommerce/vendure/blob/121b6fcd0c0ebf7d5a7fdb9fb671a234da8a38ca/packages/core/src/service/services/payment-method.service.ts#L227
+function getDefaultValue(type: ConfigArgType): string {
+    switch (type) {
+        case 'string':
+            return '';
+        case 'boolean':
+            return 'false';
+        case 'int':
+        case 'float':
+            return '0';
+        case 'ID':
+            return '';
+        case 'datetime':
+            return new Date().toISOString();
+        default:
+            assertNever(type);
+            return '';
+    }
 }
