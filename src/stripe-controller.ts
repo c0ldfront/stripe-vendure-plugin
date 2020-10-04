@@ -16,7 +16,7 @@ import { Connection } from 'typeorm';
 import { IStripeOrder } from './interfaces';
 import { Stripe } from 'stripe';
 
-@Controller('stripe')
+@Controller('payment')
 export class StripeController {
     constructor(
         @InjectConnection() private connection: Connection,
@@ -24,7 +24,7 @@ export class StripeController {
         private channelService: ChannelService,
     ) {}
 
-    @Post('/webhook/')
+    @Post('stripe-webhook/')
     async index(@Req() req: any, @Res() res: any): Promise<any> {
         const args = await getPaymentMethodArgs(this.connection);
         const stripe = getGateway(args);
@@ -38,7 +38,7 @@ export class StripeController {
             event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
         } catch (err) {
             Logger.error(`Webhook error: ${err.message}`, loggerCtx);
-            return res.status(400);
+            return res.sendStatus(400);
         }
 
         Logger.info(`Webhook success: ${event.id}`, loggerCtx);
@@ -91,15 +91,21 @@ export class StripeController {
                 break;
             default:
                 Logger.warn(`Unhandled event type ${event.type}`, loggerCtx);
-                return res.status(400);
+                return res.sendStatus(400);
         }
 
-        return res.send(200);
+        return res.sendStatus(200);
     }
 
     // constructStripeObject<T>(stripeDataObject: Stripe.Event.Data): T {
     //     return stripeDataObject.object as T;
     // }
+
+    @Post('testApi')
+    async testApi(@Req() req: any, @Res() res: any) {
+        const args = await getPaymentMethodArgs(this.connection);
+        const stripe = getGateway(args);
+    }
 
     async handleWebhookPayment(stripeOrderEvent: IStripeOrder): Promise<void> {
         // const stripeObject = this.constructStripeObject<Stripe.Source>(stripeOrderEvent.event.data);

@@ -3,20 +3,20 @@ import {
     CreatePaymentErrorResult,
     CreatePaymentResult,
     CreateRefundResult,
-    InternalServerError,
+    Customer,
     Logger,
     Order,
     Payment,
     PaymentMethodHandler,
     SettlePaymentResult,
 } from '@vendure/core';
-
-import { getGateway } from './stripe-common';
+import { Connection } from 'typeorm';
+import { createStripeCustomer, getGateway } from './stripe-common';
 import { loggerCtx } from './constants';
 import { Stripe } from 'stripe';
 import { ConfigArgValues } from '@vendure/core/dist/common/configurable-operation';
-import { PaymentMetadata } from '@vendure/core/dist/entity/payment/payment.entity';
-import { PaymentState } from '@vendure/core/dist/service/helpers/payment-state-machine/payment-state';
+
+let connection: Connection | null = null;
 
 /**
  * The handler for stripe payments.
@@ -24,52 +24,85 @@ import { PaymentState } from '@vendure/core/dist/service/helpers/payment-state-m
  */
 export const stripePaymentMethodHandler = new PaymentMethodHandler({
     code: 'stripe',
-    description: [{ languageCode: LanguageCode.en, value: 'stripe_description' }],
+    description: [{ languageCode: LanguageCode.en, value: 'Stripe Payment Gateway' }],
     args: {
         stripeTestMode: {
             type: 'boolean',
+            label: [{ languageCode: LanguageCode.en, value: 'Enable Stripe Test Mode' }],
         },
         stripeAutomaticCapture: {
             type: 'boolean',
-        },
-        testPublishableKey: {
-            type: 'string',
-        },
-        testSecretKey: {
-            type: 'string',
-        },
-        livePublishableKey: {
-            type: 'string',
-        },
-        liveSecretKey: {
-            type: 'string',
-        },
-        statementDescriptor: {
-            type: 'string',
-        },
-        enableStripeWebhooks: {
-            type: 'boolean',
-        },
-        testWebhookSecretKey: {
-            type: 'string',
-        },
-        liveWebhookSecretKey: {
-            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Enable Automatic Capture' }],
         },
         enableStripeReceipts: {
             type: 'boolean',
+            label: [{ languageCode: LanguageCode.en, value: 'Enable Stripe Receipts' }],
         },
-        enableStripeWebhookSignatureCheck: {
+        testPublishableKey: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Test Publishable Key' }],
+        },
+        testSecretKey: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Test Secret Key' }],
+        },
+        livePublishableKey: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Live Publishable Key' }],
+        },
+        liveSecretKey: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Live Secret Key' }],
+        },
+        statementDescriptor: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Statement Descriptor' }],
+        },
+        enableStripeWebhooks: {
+            type: 'boolean',
+            label: [{ languageCode: LanguageCode.en, value: 'Enable Stripe Webhooks' }],
+        },
+        testWebhookSecretKey: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Test Webhook Secret Key' }],
+        },
+        liveWebhookSecretKey: {
+            type: 'string',
+            label: [{ languageCode: LanguageCode.en, value: 'Live Webhook Secret Key' }],
+        },
+        enableStripeCustomers: {
             type: 'boolean',
         },
     },
-
+    init(injector) {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        connection = injector.getConnection();
+    },
+    destroy() {
+        connection = null;
+    },
     createPayment: async (order, args, metadata): Promise<CreatePaymentResult | CreatePaymentErrorResult> => {
         const gateway = getGateway(args);
         let intent: Stripe.Response<Stripe.PaymentIntent>;
+        let stripCustomer: Stripe.Customer | null = null;
 
         try {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            const { stripeCustomerId } = order.customer.customFields;
+            if (order.customer && !stripeCustomerId && args.enableStripeCustomers && connection) {
+                stripCustomer = await createStripeCustomer(gateway, order.customer);
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
+                order.customer.customFields.stripeCustomerId = stripCustomer.id;
+                await connection.getRepository(Customer).save(order.customer);
+            }
+
             intent = await gateway.paymentIntents.create({
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-ignore
+                customer: !stripCustomer ? order.customer.customFields.stripeCustomerId : stripCustomer.id,
                 amount: order.total,
                 currency: order.currencyCode,
                 payment_method: metadata.paymentMethod.id,
