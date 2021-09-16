@@ -1,3 +1,5 @@
+NOT MAINTAINED goto https://github.com/gaiusmathew/stripe-payment-plugin
+
 # Stripe VendureIO plugin
 
 This plugin enables payments to be processed by [Stripe](https://www.stripe.com/).
